@@ -42,13 +42,8 @@ export default function Home() {
       const data = await getPokemon(identifier);
       setPokemon(data);
 
-      const speciesInfo = await fetch(data.species.url);
-      if (!speciesInfo.ok) throw new Error(`Failed to fetch species data from ${data.species.url}`);
-      const speciesData = await speciesInfo.json();
-
-      const evolutionChainResponse = await fetch(speciesData.evolution_chain.url);
-      if (!evolutionChainResponse.ok) throw new Error(`Failed to fetch evolution chain from ${speciesData.evolution_chain.url}`);
-      const evolutionData = await evolutionChainResponse.json();
+      const speciesData = await getEvolutionChain(data.species.url);
+      const evolutionData = await getEvolutionChain(speciesData.evolution_chain.url);
 
       const fetchedEvolutions: Pokemon[] = [];
       let currentEvolution = evolutionData.chain;
