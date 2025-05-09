@@ -41,26 +41,46 @@ export default function Home() {
     try {
       const data = await getPokemon(identifier);
       setPokemon(data);
-      const speciesData = await getEvolutionChain(data.species.url);
-      const evolutionData = await getEvolutionChain(
-        speciesData.evolution_chain.url
-      );
+
+      const speciesInfo = await fetch(data.species.url);
+      if (!speciesInfo.ok) throw new Error(`Failed to fetch species data from ${data.species.url}`);
+      const speciesData = await speciesInfo.json();
+
+      const evolutionChainResponse = await fetch(speciesData.evolution_chain.url);
+      if (!evolutionChainResponse.ok) throw new Error(`Failed to fetch evolution chain from ${speciesData.evolution_chain.url}`);
+      const evolutionData = await evolutionChainResponse.json();
+
       const fetchedEvolutions: Pokemon[] = [];
-      let current = evolutionData.chain;
-      while (current) {
+      let currentEvolution = evolutionData.chain;
+
+      while (currentEvolution) {
         try {
-            const pokemonData = await getPokemon(current.species.name);
+            const pokemonData = await getPokemon(currentEvolution.species.name);
             fetchedEvolutions.push(pokemonData);
-            current = current.evolves_to[0];
+            if (currentEvolution.evolves_to && currentEvolution.evolves_to.length > 0) {
+                currentEvolution = currentEvolution.evolves_to[0];
+            } else {
+                currentEvolution = null;
+            }
         } catch (evolutionError) {
-            console.error("Failed to fetch evolution species data:", current.species.name, evolutionError);
-            current = current.evolves_to[0];
+            console.error("Failed to fetch evolution species data:", currentEvolution?.species?.name, evolutionError);
+            if (currentEvolution?.evolves_to && currentEvolution.evolves_to.length > 0) {
+                currentEvolution = currentEvolution.evolves_to[0];
+            } else {
+                currentEvolution = null;
+            }
         }
       }
       setEvolutions(fetchedEvolutions);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to fetch Pokémon data:", err);
-      setError(`Error loading Pokémon: ${err.message || "Unknown error"}`);
+      if (err instanceof Error) {
+        setError(`Error loading Pokémon: ${err.message}`);
+      } else if (typeof err === 'string') {
+        setError(`Error loading Pokémon: ${err}`);
+      } else {
+        setError("An unknown error occurred while loading Pokémon data.");
+      }
     } finally {
       setLoading(false);
     }
