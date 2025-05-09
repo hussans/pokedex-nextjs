@@ -1,7 +1,12 @@
 import React, { useState } from "react";
 import Image from "next/image";
 
-const Search = ({ onSearch, onRandom }: any) => {
+interface SearchProps {
+  onSearch: (searchTerm: string) => void;
+  onRandom: () => void;
+}
+
+const Search = ({ onSearch, onRandom }: SearchProps) => {
   const [inputValue, setInputValue] = useState("");
   const [searchImg, setSearchImg] = useState("/search.png");
   const [shuffleImg, setShuffleImg] = useState("/shuffle.png");

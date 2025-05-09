@@ -6,10 +6,10 @@ import Image from "next/image";
 import { getLocalStorage, setLocalStorage } from "./utils/localStorage";
 import { getPokemon, getEvolutionChain } from "./utils/dataServices";
 import Modal from "./components/Modal";
+import { Pokemon } from "./utils/types";
 
 export default function Home() {
-  const [pokemonName, setPokemonName] = useState("Mew");
-  const [pokemon, setPokemon] = useState<any>(null);
+  const [pokemon, setPokemon] = useState<Pokemon | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [isShiny, setIsShiny] = useState(false);
@@ -17,7 +17,7 @@ export default function Home() {
   const [showMoves, setShowMoves] = useState(false);
   const [showFavorites, setShowFavorites] = useState(false);
   const [favorites, setFavorites] = useState<number[]>([]);
-  const [evolutions, setEvolutions] = useState<any[]>([]);
+  const [evolutions, setEvolutions] = useState<Pokemon[]>([]);
 
   const [imageContainerFav, setImageContainerFav] = useState(
     "/pokeball-white.png"
@@ -35,6 +35,9 @@ export default function Home() {
 
   const fetchPokemonData = async (identifier: string | number) => {
     setLoading(true);
+    setError("");
+    setPokemon(null);
+    setEvolutions([]);
     try {
       const data = await getPokemon(identifier);
       setPokemon(data);
@@ -42,17 +45,22 @@ export default function Home() {
       const evolutionData = await getEvolutionChain(
         speciesData.evolution_chain.url
       );
-      const evolutions = [];
+      const fetchedEvolutions: Pokemon[] = [];
       let current = evolutionData.chain;
       while (current) {
-        const pokemonData = await getPokemon(current.species.name);
-        evolutions.push(pokemonData);
-        current = current.evolves_to[0];
+        try {
+            const pokemonData = await getPokemon(current.species.name);
+            fetchedEvolutions.push(pokemonData);
+            current = current.evolves_to[0];
+        } catch (evolutionError) {
+            console.error("Failed to fetch evolution species data:", current.species.name, evolutionError);
+            current = current.evolves_to[0];
+        }
       }
-      setEvolutions(evolutions);
-      setError("");
-    } catch (err) {
-      setError("Error loading Pokémon data");
+      setEvolutions(fetchedEvolutions);
+    } catch (err: any) {
+      console.error("Failed to fetch Pokémon data:", err);
+      setError(`Error loading Pokémon: ${err.message || "Unknown error"}`);
     } finally {
       setLoading(false);
     }
@@ -106,22 +114,28 @@ export default function Home() {
           <div>
             <Search onSearch={handleSearch} onRandom={handleRandom} />
           </div>
+          {loading && <p className="text-white mt-4">Loading Pokémon data...</p>}
+          {error && <p className="text-red-500 mt-4">{error}</p>}
           <div className="bg-[#D9D9D940] rounded-xl mt-5 w-full h-[500px] relative">
             {pokemon && (
               <div className="flex justify-center">
-                <img
-                  className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[400px]"
+                <Image
+                  className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"
                   src={
                     isShiny
                       ? pokemon.sprites.front_shiny
                       : pokemon.sprites.front_default
                   }
                   alt={pokemon.name}
+                  width={400}
+                  height={400}
+                  priority
                 />
                 <div className="absolute bottom-0 left-0 transform translate-x-0 translate-y-0 flex flex-row items-center gap-3 p-6">
                   <button onClick={() => setIsShiny(!isShiny)}>
-                    <img
-                      className="w-[25px]"
+                    <Image
+                      width={25}
+                      height={25}
                       src="/shinystar-icon.png"
                       alt="Shiny Toggle"
                     />
@@ -147,9 +161,16 @@ export default function Home() {
                 </div>
               </div>
             )}
+            {!pokemon && !loading && !error && (
+                <div className="flex justify-center items-center h-full">
+                    <p className="text-white text-xl">Search for a Pokémon or try a random one!</p>
+                </div>
+            )}
           </div>
           <div className="flex justify-center mt-10">
-            <p className="font-bold text-2xl">{pokemon?.name || "Name"}</p>
+            <p className="font-bold text-2xl text-white">
+              {pokemon?.name ? pokemon.name.charAt(0).toUpperCase() + pokemon.name.slice(1) : "Name"}
+            </p>
           </div>
         </div>
 
@@ -189,10 +210,12 @@ export default function Home() {
             </button>
           </div>
 
-          <div className="flex flex-col mt-5">
+          <div className="flex flex-col mt-5 text-white">
             <p className="font-bold text-xl">
               Element Type:{" "}
-              {pokemon?.types?.map((t: any) => t.type.name).join(", ")}
+              {pokemon?.types
+                ?.map((t: { type: { name: string } }) => t.type.name)
+                .join(", ")}
             </p>
             <p className="font-bold text-xl"> Location: N/A </p>
           </div>
@@ -201,33 +224,42 @@ export default function Home() {
             <button
               className="bg-white font-bold text-xl text-black rounded-md py-2.5 hover:bg-black hover:text-white active:text-black active:bg-white transition duration-300 ease-in-out"
               onClick={() => setShowAbilities(true)}
+              disabled={!pokemon}
             >
               Abilities
             </button>
             <button
               className="bg-white font-bold text-xl text-black rounded-md py-2.5 hover:bg-black hover:text-white active:text-black active:bg-white transition duration-300 ease-in-out"
               onClick={() => setShowMoves(true)}
+              disabled={!pokemon}
             >
               Moves
             </button>
           </div>
 
-          <div className="flex flex-col mt-15">
+          <div className="flex flex-col mt-5 text-white">
             <p className="font-bold text-xl"> Evolutions: </p>
-            <div className="grid grid-cols-3 gap-1">
-              {evolutions.map((evo, index) => (
-                <div
-                  key={index}
-                  className="bg-[#D9D9D940] rounded-md w-full h-[215px] relative"
-                >
-                  <img
-                    className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"
-                    src={evo.sprites.front_default}
-                    alt={evo.name}
-                  />
+            {evolutions.length > 0 ? (
+                <div className="grid grid-cols-3 gap-2 mt-2">
+                {evolutions.map((evo) => (
+                    <div
+                    key={evo.id}
+                    className="bg-[#D9D9D940] rounded-md w-full h-[150px] flex flex-col items-center justify-center p-2 cursor-pointer hover:bg-[#FFFFFF50]"
+                    onClick={() => fetchPokemonData(evo.id)}
+                    >
+                    <Image
+                        src={evo.sprites.front_default}
+                        alt={evo.name}
+                        width={96}
+                        height={96}
+                    />
+                    <p className="text-sm mt-1">{evo.name.charAt(0).toUpperCase() + evo.name.slice(1)}</p>
+                    </div>
+                ))}
                 </div>
-              ))}
-            </div>
+            ) : (
+                pokemon && !loading && <p className="text-sm mt-2">No further evolutions found or data unavailable.</p>
+            )}
           </div>
         </div>
       </div>
@@ -238,7 +270,9 @@ export default function Home() {
         title="Abilities"
       >
         <p className="text-black text-xl">
-          {pokemon?.abilities?.map((a: any) => a.ability.name).join(", ")}
+          {pokemon?.abilities
+            ?.map((a: { ability: { name: string } }) => a.ability.name)
+            .join(", ")}
         </p>
       </Modal>
 
@@ -248,7 +282,9 @@ export default function Home() {
         title="Moves"
       >
         <p className="text-black text-xl">
-          {pokemon?.moves?.map((m: any) => m.move.name).join(", ")}
+          {pokemon?.moves
+            ?.map((m: { move: { name: string } }) => m.move.name)
+            .join(", ")}
         </p>
       </Modal>
 
@@ -258,37 +294,45 @@ export default function Home() {
         title="Favorites"
       >
         <div className="space-y-4">
-          {favorites.map((id) => (
-            <div key={id} className="flex items-center justify-between">
-              <img
-                src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`}
-                alt="Favorite"
-                className="w-20 h-20 cursor-pointer"
-                onClick={() => {
-                  fetchPokemonData(id);
-                  setShowFavorites(false);
-                }}
-              />
-              <button
-                onClick={() => handleRemoveFavorite(id)}
-                className="text-red-500 hover:text-red-700"
-              >
-                <svg
-                  className="w-6 h-6"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+          {favorites.length > 0 ? (
+            favorites.map((id) => (
+              <div key={id} className="flex items-center justify-between p-2 rounded hover:bg-gray-200">
+                <div className="flex items-center cursor-pointer" onClick={() => {
+                    fetchPokemonData(id);
+                    setShowFavorites(false);
+                    }}>
+                    <Image
+                        src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`}
+                        alt={`Favorite Pokemon ${id}`}
+                        width={60}
+                        height={60}
+                        className="mr-4"
+                    />
+                </div>
+                <button
+                  onClick={() => handleRemoveFavorite(id)}
+                  className="text-red-500 hover:text-red-700 p-2"
+                  aria-label={`Remove favorite ${id}`}
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
-            </div>
-          ))}
+                  <svg
+                    className="w-6 h-6"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              </div>
+            ))
+          ) : (
+            <p className="text-black text-center">No favorite Pokémon yet.</p>
+          )}
         </div>
       </Modal>
     </div>
